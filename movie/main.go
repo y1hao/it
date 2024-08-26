@@ -3,36 +3,64 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"strings"
+
+	"y1hao.github.com/it"
 )
 
+// data files are downloaded from MovieLens
+// https://grouplens.org/datasets/movielens/
+
 func main() {
-	lines, cleanUp, err := ReadLines("./movie/data/ml-32m/movies.csv")
+	// process ratings file
+	ratingsFile, err := os.Open("./movie/data/ml-32m/ratings.csv")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cleanUp()
+	defer ratingsFile.Close()
 
-	movies := make(map[int]string)
-	movieEntries := OmitError(Movies(lines))
-	for m := range movieEntries {
-		movies[m.ID] = m.Title
-	}
+	// get all entries
+	ratings := Ratings(Entries(ratingsFile))
 
-	lines, cleanUp, err = ReadLines("./movie/data/ml-32m/ratings.csv")
+	// remove invalid entries
+	validRatings := OmitError(ratings)
+
+	// aggregate entries to total
+	stats := GetStats(validRatings)
+
+	// only consider popular movies
+	effective := it.Filter(func(r *Stats) bool {
+		return r.Count > 50
+	}, stats)
+
+	// find the max
+	max := it.Reduce(nil, func(cur, acc *Stats) *Stats {
+		if acc == nil {
+			return cur
+		}
+		if cur.Avg() > acc.Avg() {
+			return cur
+		}
+		return acc
+	}, effective)
+
+	// find the movie with maxID
+	moviesFile, err := os.Open("./movie/data/ml-32m/movies.csv")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cleanUp()
+	defer moviesFile.Close()
 
-	ratings := make(map[string]float64)
-	for r := range OmitError(Ratings(lines)) {
-		title, ok := movies[r.MovieID]
-		if ok {
-			ratings[title] += r.Rating
+	for m := range OmitError(Movies(Entries(moviesFile))) {
+		if m.ID == max.MovieID {
+			fmt.Printf("The highest rated movie is %q\n", m.Title)
+			fmt.Printf("Rating: %.2f\n", max.Avg())
+			fmt.Printf("Rated by: %d\n", max.Count)
+			fmt.Printf("Genres: %s\n", strings.Join(m.Genres, ", "))
+			return
 		}
 	}
 
-	for t, r := range ratings {
-		fmt.Printf("%s: %f\n", t, r)
-	}
+	log.Fatal("Could not find the highest rated movie is not found\n")
 }

@@ -7,13 +7,13 @@ import (
 
 func TestNaturals(t *testing.T) {
 	var got []int
-	max, i := 5, 0
+	max, cur := 5, 0
 	for n := range Naturals() {
-		if i == max {
+		if cur == max {
 			break
 		}
-		i++
 		got = append(got, n)
+		cur++
 	}
 
 	want := []int{0, 1, 2, 3, 4}
